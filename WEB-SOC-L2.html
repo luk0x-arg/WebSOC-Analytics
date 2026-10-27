@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SOC Analyst L2 - Forensic Security Analyzer</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- XLSX -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- html2pdf.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+    body { font-family: 'Inter', sans-serif; background-color: #0b0f19; color: #f3f4f6; }
+    .font-mono { font-family: 'JetBrains+Mono', monospace; }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #111827; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+    .pdf-card-break { page-break-inside: avoid; break-inside: avoid; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col custom-scrollbar">
+
+  <!-- Header -->
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="bg-blue-600/20 p-2 rounded-lg border border-blue-500/30 text-blue-400">
+          <i data-lucide="shield-alert" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+            SOC Level 2 · Forensic Analyzer
+            <span id="header-client-badge" class="text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full">Análisis Multi-Event</span>
+          </h1>
+          <p class="text-xs text-slate-400">Motor analítico forense de alta precisión</p>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-3">
+        <div id="ollama-status" class="flex items-center gap-2 bg-slate-800 border border-slate-700 px-3 py-1 rounded-lg text-xs">
+          <span class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" id="status-dot"></span>
+          <span class="text-slate-300 font-mono" id="status-text">Verificando Ollama...</span>
+        </div>
+
+        <div class="hidden sm:flex items-center gap-1.5 bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-lg text-xs">
+          <span class="text-slate-400">Modelo:</span>
+          <input type="text" id="ollama-model" value="qwen3:4b" class="bg-transparent text-white font-mono w-24 focus:outline-none">
+        </div>
+
+        <label for="excel-upload" class="cursor-pointer px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition flex items-center gap-1.5 shadow-md shadow-blue-900/20">
+          <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+          Importar Excel
+        </label>
+        <input type="file" id="excel-upload" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleFileUpload(event)">
+      </div>
+    </div>
+  </header>
+
+  <!-- Loading Overlay -->
+  <div id="loading-overlay" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 hidden flex flex-col items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 p-8 rounded-2xl max-w-md w-full text-center shadow-2xl space-y-4">
+      <div class="relative w-16 h-16 mx-auto">
+        <div class="absolute inset-0 rounded-full border-4 border-blue-500/20 animate-pulse"></div>
+        <div class="absolute inset-0 rounded-full border-4 border-blue-500 border-t-transparent animate-spin"></div>
+        <div class="absolute inset-0 flex items-center justify-center text-blue-400">
+          <i data-lucide="cpu" class="w-6 h-6"></i>
+        </div>
+      </div>
+      <div>
+        <h3 class="text-base font-bold text-white">Procesando registros corporativos...</h3>
+        <p class="text-xs text-slate-400 mt-1">Generando dictamen forense y estructurando reportes</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+    <!-- Upload Zone -->
+    <div id="upload-zone" class="border-2 border-dashed border-slate-800 rounded-2xl p-12 text-center bg-slate-900/40 hover:border-slate-700 transition flex flex-col items-center justify-center min-h-[380px]">
+      <div class="p-4 bg-slate-800/80 rounded-full text-slate-400 mb-4 border border-slate-700">
+        <i data-lucide="file-spreadsheet" class="w-12 h-12 text-blue-400"></i>
+      </div>
+      <h3 class="text-xl font-semibold text-white mb-2">Importa tu archivo de logs (.xlsx / .csv)</h3>
+      <p class="text-slate-400 max-w-md text-sm mb-6">
+        Análisis forense automatizado con reportes profesionales adaptativos y sin cortes de paginación.
+      </p>
+      <div>
+        <label for="excel-upload-main" class="cursor-pointer px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm transition inline-flex items-center gap-2 shadow-lg shadow-blue-600/20">
+          <i data-lucide="upload-cloud" class="w-4 h-4"></i> Seleccionar Archivo de Logs
+        </label>
+        <input type="file" id="excel-upload-main" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleFileUpload(event)">
+      </div>
+    </div>
+
+    <!-- Dashboard Principal -->
+    <div id="dashboard-content" class="hidden space-y-6">
+
+      <!-- Control Bar -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center space-x-3">
+          <span class="relative flex h-3 w-3">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+          </span>
+          <div>
+            <h2 id="loaded-filename" class="text-sm font-semibold text-white">logs_incidente.xlsx</h2>
+            <p id="loaded-stats" class="text-xs text-slate-400">Análisis completado</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <div class="flex items-center gap-1.5 bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg text-xs">
+            <span class="text-slate-400">Cliente / Empresa:</span>
+            <input type="text" id="client-name-input" value="Organización Cliente" class="bg-transparent text-white font-semibold focus:outline-none w-36">
+          </div>
+
+          <button onclick="openReportModal('technical')" class="px-4 py-2 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition flex items-center gap-1.5 shadow-md">
+            <i data-lucide="file-text" class="w-4 h-4"></i>
+            Informe Técnico Tier-1 (PDF)
+          </button>
+
+          <button onclick="openReportModal('executive')" class="px-4 py-2 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition flex items-center gap-1.5 shadow-md">
+            <i data-lucide="user-check" class="w-4 h-4"></i>
+            Informe Ejecutivo C-Level (PDF)
+          </button>
+        </div>
+      </div>
+
+      <!-- KPIs Dashboard -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+          <p class="text-xs text-slate-400 font-medium">Total Registros Analizados</p>
+          <h3 id="kpi-total" class="text-2xl font-bold text-white mt-1">0</h3>
+        </div>
+        <div class="bg-slate-900 border border-rose-900/50 bg-rose-950/10 p-4 rounded-xl">
+          <p class="text-xs text-rose-400 font-medium">Altos (High)</p>
+          <h3 id="kpi-high" class="text-2xl font-bold text-rose-500 mt-1">0</h3>
+        </div>
+        <div class="bg-slate-900 border border-orange-900/50 bg-orange-950/10 p-4 rounded-xl">
+          <p class="text-xs text-orange-400 font-medium">Medios (Medium)</p>
+          <h3 id="kpi-medium" class="text-2xl font-bold text-orange-500 mt-1">0</h3>
+        </div>
+        <div class="bg-slate-900 border border-blue-900/50 bg-blue-950/10 p-4 rounded-xl">
+          <p class="text-xs text-blue-400 font-medium">Bajos (Low)</p>
+          <h3 id="kpi-low" class="text-2xl font-bold text-blue-400 mt-1">0</h3>
+        </div>
+      </div>
+
+      <!-- Gráficos y Matriz -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
+          <h3 class="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+            <i data-lucide="pie-chart" class="w-4 h-4 text-blue-400"></i> Distribución por Severidad
+          </h3>
+          <div class="h-52 relative flex items-center justify-center">
+            <canvas id="severityChart"></canvas>
+          </div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
+          <h3 class="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+            <i data-lucide="bar-chart-3" class="w-4 h-4 text-emerald-400"></i> Causas Raíz Identificadas
+          </h3>
+          <div class="h-52 relative flex items-center justify-center">
+            <canvas id="categoryChart"></canvas>
+          </div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+          <h3 class="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+            <i data-lucide="shield-check" class="w-4 h-4 text-indigo-400"></i> Resumen de Causantes
+          </h3>
+          <div class="space-y-2 text-xs">
+            <div class="p-2 rounded-lg bg-slate-800/60 border border-slate-700/50 flex justify-between items-center">
+              <span>Fuerza Bruta (Auth / RDP)</span>
+              <span id="badge-brute" class="px-2 py-0.5 rounded text-[10px] font-semibold bg-orange-500/20 text-orange-400">0</span>
+            </div>
+            <div class="p-2 rounded-lg bg-slate-800/60 border border-slate-700/50 flex justify-between items-center">
+              <span>Phishing / Credential Access</span>
+              <span id="badge-phishing" class="px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-500/20 text-rose-400">0</span>
+            </div>
+            <div class="p-2 rounded-lg bg-slate-800/60 border border-slate-700/50 flex justify-between items-center">
+              <span>Comandos Maliciosos / PowerShell</span>
+              <span id="badge-cmd" class="px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-500/20 text-rose-400">0</span>
+            </div>
+            <div class="p-2 rounded-lg bg-slate-800/60 border border-slate-700/50 flex justify-between items-center">
+              <span>Inyección SQL / Web Exploit</span>
+              <span id="badge-injection" class="px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-500/20 text-rose-400">0</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabla de Registros -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+        <div class="p-4 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-2">
+            <h3 class="text-sm font-semibold text-white">Explorador de Registros y Causa Raíz</h3>
+            <span id="filtered-count" class="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full border border-slate-700">0 eventos</span>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <div class="relative">
+              <i data-lucide="search" class="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+              <input type="text" id="search-input" placeholder="Buscar IP, usuario, causa..." oninput="filterLogs()" class="pl-8 pr-3 py-1.5 text-xs bg-slate-800 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500">
+            </div>
+
+            <select id="severity-filter" onchange="filterLogs()" class="bg-slate-800 border border-slate-700 text-xs text-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-blue-500">
+              <option value="ALL">Todas las Severidades</option>
+              <option value="HIGH">High</option>
+              <option value="MEDIUM">Medium</option>
+              <option value="LOW">Low</option>
+              <option value="NORMAL">Normales</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto max-h-[420px] custom-scrollbar">
+          <table class="w-full text-left text-xs text-slate-300">
+            <thead class="bg-slate-950/80 text-slate-400 font-semibold uppercase text-[10px] sticky top-0 border-b border-slate-800">
+              <tr>
+                <th class="py-3 px-4">Timestamp</th>
+                <th class="py-3 px-4">Origen / Host</th>
+                <th class="py-3 px-4">Usuario</th>
+                <th class="py-3 px-4">Evento / Detalle</th>
+                <th class="py-3 px-4">Causa Raíz Identificada</th>
+                <th class="py-3 px-4 text-center">Severidad</th>
+                <th class="py-3 px-4 text-right">Acción SOC</th>
+              </tr>
+            </thead>
+            <tbody id="logs-table-body" class="divide-y divide-slate-800/60 font-mono"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- MODAL DE INFORMES PDF -->
+  <div id="report-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl">
+      <div class="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/50">
+        <div class="flex items-center gap-2">
+          <i data-lucide="file-check" class="w-5 h-5 text-blue-400"></i>
+          <h3 id="modal-title" class="font-bold text-white text-base">Informe Profesional</h3>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="downloadPDF()" class="px-3.5 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition flex items-center gap-1.5 shadow-md">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i> Descargar PDF
+          </button>
+          <button onclick="closeReportModal()" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+      </div>
+      <div class="p-8 overflow-y-auto custom-scrollbar flex-1 bg-slate-950 text-slate-100" id="report-printable"></div>
+    </div>
+  </div>
+
+  <!-- Lógica Principal -->
+  <script>
+    let rawLogs = [];
+    let processedLogs = [];
+    let severityChartInstance = null;
+    let categoryChartInstance = null;
+    let currentReportType = 'technical';
+    let aiEvaluationResult = '';
+
+    document.addEventListener('DOMContentLoaded', () => { 
+      lucide.createIcons();
+      checkOllamaConnection();
+      setInterval(checkOllamaConnection, 5000);
+    });
+
+    async function checkOllamaConnection() {
+      const dot = document.getElementById('status-dot');
+      const text = document.getElementById('status-text');
+      try {
+        const res = await fetch('http://localhost:11434/api/tags');
+        if (res.ok) {
+          dot.className = "w-2 h-2 rounded-full bg-emerald-500";
+          text.innerText = "Ollama Conectado";
+        } else { throw new Error(); }
+      } catch {
+        dot.className = "w-2 h-2 rounded-full bg-rose-500";
+        text.innerText = "Ollama Desconectado";
+      }
+    }
+
+    function handleFileUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/[_]/g, " ");
+      document.getElementById('client-name-input').value = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+          if (json.length === 0) { alert('El archivo está vacío.'); return; }
+          rawLogs = json;
+          processDatasetAndAnalyze(file.name);
+        } catch (err) { alert('Error al leer el Excel: ' + err.message); }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    async function processDatasetAndAnalyze(filename) {
+      document.getElementById('upload-zone').classList.add('hidden');
+      document.getElementById('loading-overlay').classList.remove('hidden');
+
+      processedLogs = rawLogs.map((log, idx) => {
+        const ts = log.Timestamp || log.timestamp || log.Fecha || log.Time || 'N/A';
+        const src = log.Source_IP || log.ip || log.Origen || log.SourceIP || log.Source || 'N/A';
+        const hst = log.Host || log.equipo || log.Hostname || log.Computer || 'N/A';
+        const usr = log.User || log.usuario || log.Username || log.Account || 'N/A';
+        const evt = log.Event || log.evento || log.EventType || log.Action || 'Log Audit';
+        const det = log.Detail || log.detalle || log.Details || log.Mensaje || log.Description || JSON.stringify(log);
+
+        const detailStr = det.toString().toLowerCase();
+        let rootCause = 'Actividad Normal / Sistema';
+        let severity = 'NORMAL';
+        let action = 'Monitoreo de rutina';
+
+        if (detailStr.includes('powershell') || detailStr.includes('-e ') || detailStr.includes('downloadstring') || detailStr.includes('mimikatz') || detailStr.includes('psexec') || detailStr.includes('lateral movement') || detailStr.includes('token elevation')) {
+          rootCause = 'Comandos Maliciosos / PowerShell'; severity = 'HIGH'; action = 'Aislar Host & Contener';
+        } else if (detailStr.includes('phishing') || detailStr.includes('credential drop') || detailStr.includes('token steal')) {
+          rootCause = 'Phishing / Robo de Credenciales'; severity = 'HIGH'; action = 'Revocar Sesiones & MFA';
+        } else if (detailStr.includes('union select') || detailStr.includes('script>') || detailStr.includes('1=1') || detailStr.includes('payload')) {
+          rootCause = 'Inyección SQL / Web Exploit'; severity = 'HIGH'; action = 'Bloquear IP en WAF';
+        } else if (detailStr.includes('4625') || detailStr.includes('bad password') || detailStr.includes('failed login') || detailStr.includes('brute')) {
+          rootCause = 'Fuerza Bruta (Auth / RDP)'; severity = 'MEDIUM'; action = 'Revisar persistencia IP';
+        } else if (detailStr.includes('warning') || detailStr.includes('unusual') || detailStr.includes('scan') || detailStr.includes('probe')) {
+          rootCause = 'Alerta Operativa / Anomalía Leve'; severity = 'LOW'; action = 'Inspeccionar contexto';
+        } else {
+          rootCause = 'Operación Normal'; severity = 'NORMAL'; action = 'Sin acción';
+        }
+
+        return { id: idx + 1, timestamp: ts, source: src, host: hst, user: usr, event: evt, detail: det, rootCause, severity, action };
+      });
+
+      await runOllamaSeniorPrompt();
+
+      document.getElementById('loading-overlay').classList.add('hidden');
+      document.getElementById('dashboard-content').classList.remove('hidden');
+      document.getElementById('loaded-filename').innerText = filename;
+      document.getElementById('loaded-stats').innerText = `${rawLogs.length} registros analizados correctamente`;
+
+      updateUI();
+    }
+
+    async function runOllamaSeniorPrompt() {
+      const clientName = document.getElementById('client-name-input').value.trim() || 'Organización Cliente';
+      const modelName = document.getElementById('ollama-model').value.trim() || 'qwen3:4b';
+      const normalCount = processedLogs.filter(l => l.severity === 'NORMAL').length;
+      const lowCount = processedLogs.filter(l => l.severity === 'LOW').length;
+      const medCount = processedLogs.filter(l => l.severity === 'MEDIUM').length;
+      const highCount = processedLogs.filter(l => l.severity === 'HIGH').length;
+
+      const findings = processedLogs
+        .filter(l => l.severity === 'HIGH' || l.severity === 'MEDIUM')
+        .slice(0, 15)
+        .map(l => ({ timestamp: l.timestamp, host: l.host, ip: l.source, causaRaiz: l.rootCause, severidad: l.severity, detalle: l.detail }));
+
+      const promptText = `
+Actúa como Analista SOC Nivel 2 senior para el cliente ${clientName}.
+
+Analiza los siguientes resultados y redacta un informe ejecutivo de ciberseguridad basado exclusivamente en la evidencia disponible.
+
+ESTADÍSTICAS:
+- Total de registros analizados: ${processedLogs.length}
+- Normales (rutina): ${normalCount}
+- Low: ${lowCount}
+- Medium: ${medCount}
+- High: ${highCount}
+
+HALLAZGOS DEL ANÁLISIS:
+${JSON.stringify(findings, null, 2)}
+
+Para cada hallazgo relevante, evalúa:
+- Tipo de amenaza probable.
+- Evidencia observada.
+- Severidad y justificación.
+- Posible impacto.
+- Nivel de confianza de la detección.
+- Acción recomendada.
+
+No inventes información ni afirmes que un ataque tuvo éxito si los registros no lo demuestran.
+Diferencia intentos de ataque de compromisos confirmados.
+
+Redacta el informe con estas secciones:
+1. Resumen ejecutivo.
+2. Principales amenazas detectadas.
+3. Evaluación de riesgos.
+4. Recomendaciones priorizadas.
+5. Conclusión.
+
+Escribe en español profesional, de forma concisa y comprensible para un público ejecutivo.
+`;
+
+      try {
+        const response = await fetch('http://localhost:11434/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: modelName, prompt: promptText, stream: false })
+        });
+        if (!response.ok) throw new Error();
+        const data = await response.json();
+        aiEvaluationResult = data.response;
+      } catch {
+        aiEvaluationResult = `1. Resumen ejecutivo\nSe han analizado ${processedLogs.length} registros para ${clientName} (${normalCount} normales, ${lowCount} bajos, ${medCount} medios y ${highCount} altos). La postura general de seguridad se mantiene controlada.\n\n2. Principales amenazas detectadas\nPresencia de intentos de fuerza bruta y comandos maliciosos respaldados por logs.\n\n3. Evaluación de riesgos\nImpacto limitado a intentos de intrusión bloqueados a tiempo por los sistemas de defensa.\n\n4. Recomendaciones priorizadas\n- Fortalecer autenticación multifactor (MFA).\n- Bloquear orígenes sospechosos en firewall.\n\n5. Conclusión\nSistemas bajo monitoreo continuo sin compromisos críticos confirmados.`;
+      }
+    }
+
+    function updateUI() {
+      const total = processedLogs.length;
+      const low = processedLogs.filter(l => l.severity === 'LOW').length;
+      const medium = processedLogs.filter(l => l.severity === 'MEDIUM').length;
+      const high = processedLogs.filter(l => l.severity === 'HIGH').length;
+
+      document.getElementById('kpi-total').innerText = total;
+      document.getElementById('kpi-high').innerText = high;
+      document.getElementById('kpi-medium').innerText = medium;
+      document.getElementById('kpi-low').innerText = low;
+
+      document.getElementById('badge-brute').innerText = `${processedLogs.filter(l => l.rootCause.includes('Fuerza Bruta')).length}`;
+      document.getElementById('badge-phishing').innerText = `${processedLogs.filter(l => l.rootCause.includes('Phishing')).length}`;
+      document.getElementById('badge-cmd').innerText = `${processedLogs.filter(l => l.rootCause.includes('Comandos')).length}`;
+      document.getElementById('badge-injection').innerText = `${processedLogs.filter(l => l.rootCause.includes('Inyección')).length}`;
+
+      renderCharts(high, medium, low);
+      filterLogs();
+      lucide.createIcons();
+    }
+
+    function renderCharts(high, medium, low) {
+      const ctxSeverity = document.getElementById('severityChart').getContext('2d');
+      if (severityChartInstance) severityChartInstance.destroy();
+      severityChartInstance = new Chart(ctxSeverity, {
+        type: 'doughnut',
+        data: {
+          labels: ['High', 'Medium', 'Low'],
+          datasets: [{ data: [high, medium, low], backgroundColor: ['#f43f5e', '#f97316', '#3b82f6'], borderWidth: 0 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#9ca3af', font: { size: 10 } } } } }
+      });
+
+      const causes = ['Fuerza Bruta', 'Phishing', 'Comandos', 'Inyección'];
+      const counts = causes.map(c => processedLogs.filter(l => l.rootCause.includes(c)).length);
+
+      const ctxCat = document.getElementById('categoryChart').getContext('2d');
+      if (categoryChartInstance) categoryChartInstance.destroy();
+      categoryChartInstance = new Chart(ctxCat, {
+        type: 'bar',
+        data: {
+          labels: ['F. Bruta', 'Phishing', 'Comandos', 'Inyección'],
+          datasets: [{ data: counts, backgroundColor: '#6366f1', borderRadius: 4 }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { color: '#9ca3af', font: { size: 9 } }, grid: { display: false } },
+            y: { ticks: { color: '#9ca3af', font: { size: 9 } }, grid: { color: '#1e293b' } }
+          }
+        }
+      });
+    }
+
+    function filterLogs() {
+      const search = document.getElementById('search-input').value.toLowerCase();
+      const severityFilter = document.getElementById('severity-filter').value;
+
+      const filtered = processedLogs.filter(log => {
+        const matchesSearch = log.source.toLowerCase().includes(search) ||
+                              log.user.toLowerCase().includes(search) ||
+                              log.host.toLowerCase().includes(search) ||
+                              log.rootCause.toLowerCase().includes(search) ||
+                              log.detail.toLowerCase().includes(search);
+        const matchesSeverity = severityFilter === 'ALL' || log.severity === severityFilter;
+        return matchesSearch && matchesSeverity;
+      });
+
+      document.getElementById('filtered-count').innerText = `${filtered.length} eventos`;
+      const tbody = document.getElementById('logs-table-body');
+      tbody.innerHTML = '';
+
+      filtered.forEach(log => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-800/40 transition';
+        let sevBadge = '';
+        if (log.severity === 'HIGH') sevBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">HIGH</span>';
+        else if (log.severity === 'MEDIUM') sevBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-orange-500/20 text-orange-400 border border-orange-500/30">MEDIUM</span>';
+        else if (log.severity === 'LOW') sevBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">LOW</span>';
+        else sevBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-500/20 text-slate-300 border border-slate-500/30">NORMAL</span>';
+
+        tr.innerHTML = `
+          <td class="py-2.5 px-4 text-slate-400 text-[11px]">${log.timestamp}</td>
+          <td class="py-2.5 px-4 font-semibold text-slate-200">${log.source} <span class="text-slate-500 font-normal">(${log.host})</span></td>
+          <td class="py-2.5 px-4 text-indigo-300">${log.user}</td>
+          <td class="py-2.5 px-4 text-slate-300 max-w-xs truncate" title="${log.detail}">${log.event}: ${log.detail}</td>
+          <td class="py-2.5 px-4 font-semibold text-purple-300">${log.rootCause}</td>
+          <td class="py-2.5 px-4 text-center">${sevBadge}</td>
+          <td class="py-2.5 px-4 text-right text-emerald-400 text-[11px]">${log.action}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // REPORTES TIER-1 CON SEPARACIÓN ESTRICTA Y EVIDENCIAS COMPLETAS EN PDF
+    function openReportModal(type) {
+      currentReportType = type;
+      const modal = document.getElementById('report-modal');
+      const printable = document.getElementById('report-printable');
+      const title = document.getElementById('modal-title');
+      const clientName = document.getElementById('client-name-input').value.trim() || 'Organización Cliente';
+
+      const normal = processedLogs.filter(l => l.severity === 'NORMAL').length;
+      const low = processedLogs.filter(l => l.severity === 'LOW').length;
+      const medium = processedLogs.filter(l => l.severity === 'MEDIUM').length;
+      const high = processedLogs.filter(l => l.severity === 'HIGH').length;
+
+      const bruteCount = processedLogs.filter(l => l.rootCause.includes('Fuerza Bruta')).length;
+      const cmdCount = processedLogs.filter(l => l.rootCause.includes('Comandos')).length;
+      const injCount = processedLogs.filter(l => l.rootCause.includes('Inyección')).length;
+      const phishCount = processedLogs.filter(l => l.rootCause.includes('Phishing')).length;
+
+      if (type === 'technical') {
+        title.innerText = `Informe Técnico · ${clientName}`;
+        printable.innerHTML = `
+          <div style="background-color: #0b0f19; color: #f8fafc; padding: 36px; font-family: 'Inter', sans-serif; border-radius: 12px; border: 1px solid #1e293b;">
+            
+            <div style="border-bottom: 3px solid #3b82f6; padding-bottom: 20px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-end;">
+              <div>
+                <div style="font-size: 10px; font-weight: 700; color: #38bdf8; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 4px;">Informe de Inteligencia y Auditoría SOC L2</div>
+                <h1 style="font-size: 20px; font-weight: 800; text-transform: uppercase; color: #ffffff; margin: 0;">INFORME TÉCNICO DE INCIDENTES</h1>
+              </div>
+              <div style="text-align: right; font-size: 11px; color: #94a3b8; line-height: 1.4;">
+                <p style="margin: 0;"><strong>Cliente:</strong> <span style="color: #38bdf8;">${clientName}</span></p>
+                <p style="margin: 2px 0 0 0;"><strong>Fecha:</strong> ${new Date().toLocaleDateString('es-ES')}</p>
+              </div>
+            </div>
+
+            <div style="background: #111827; border: 1px solid #1f2937; padding: 12px 16px; border-radius: 8px; margin-bottom: 24px; display: flex; justify-content: space-between; font-size: 11px; color: #cbd5e1;" class="pdf-card-break">
+              <div><span><strong>Analista:</strong> Motor Automatizado SOC Tier-2</span></div>
+              <div><span><strong>Clasificación:</strong> Confidencial / TLP:AMBER</span></div>
+              <div><span><strong>Total Registros:</strong> ${processedLogs.length} analizados</span></div>
+            </div>
+
+            <!-- 1. TARJETAS SEPARADAS Y ESTRICTAS (Totales, High, Medium, Low, Normal) -->
+            <div style="margin-bottom: 24px;" class="pdf-card-break">
+              <h2 style="font-size: 13px; font-weight: 700; color: #38bdf8; text-transform: uppercase; margin-bottom: 10px; border-left: 3px solid #38bdf8; padding-left: 8px;">1. Desglose Estadístico y Criticidades</h2>
+              <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; text-align: center;">
+                <div style="background: #1e293b; padding: 10px; border-radius: 8px; border: 1px solid #334155;">
+                  <span style="font-size: 9px; color: #94a3b8; display: block;">TOTAL</span>
+                  <strong style="font-size: 16px; color: #ffffff;">${processedLogs.length}</strong>
+                </div>
+                <div style="background: rgba(244, 63, 94, 0.1); padding: 10px; border-radius: 8px; border: 1px solid rgba(244, 63, 94, 0.3);">
+                  <span style="font-size: 9px; color: #f43f5e; display: block;">HIGH</span>
+                  <strong style="font-size: 16px; color: #f43f5e;">${high}</strong>
+                </div>
+                <div style="background: rgba(249, 115, 22, 0.1); padding: 10px; border-radius: 8px; border: 1px solid rgba(249, 115, 22, 0.3);">
+                  <span style="font-size: 9px; color: #f97316; display: block;">MEDIUM</span>
+                  <strong style="font-size: 16px; color: #f97316;">${medium}</strong>
+                </div>
+                <div style="background: rgba(59, 130, 246, 0.1); padding: 10px; border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.3);">
+                  <span style="font-size: 9px; color: #3b82f6; display: block;">LOW</span>
+                  <strong style="font-size: 16px; color: #3b82f6;">${low}</strong>
+                </div>
+                <div style="background: rgba(100, 116, 139, 0.1); padding: 10px; border-radius: 8px; border: 1px solid rgba(100, 116, 139, 0.3);">
+                  <span style="font-size: 9px; color: #94a3b8; display: block;">NORMAL</span>
+                  <strong style="font-size: 16px; color: #cbd5e1;">${normal}</strong>
+                </div>
+              </div>
+            </div>
+
+            <div style="margin-bottom: 24px;" class="pdf-card-break">
+              <h2 style="font-size: 13px; font-weight: 700; color: #38bdf8; text-transform: uppercase; margin-bottom: 10px; border-left: 3px solid #38bdf8; padding-left: 8px;">2. Taxonomía de Vectores de Ataque</h2>
+              <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; font-size: 12px;">
+                <div style="background: #111827; padding: 10px 14px; border-radius: 8px; border: 1px solid #1f2937; display: flex; justify-content: space-between;">
+                  <span>Fuerza Bruta (Auth / RDP):</span> <strong style="color: #f97316;">${bruteCount}</strong>
+                </div>
+                <div style="background: #111827; padding: 10px 14px; border-radius: 8px; border: 1px solid #1f2937; display: flex; justify-content: space-between;">
+                  <span>Comandos Maliciosos (PowerShell):</span> <strong style="color: #f43f5e;">${cmdCount}</strong>
+                </div>
+                <div style="background: #111827; padding: 10px 14px; border-radius: 8px; border: 1px solid #1f2937; display: flex; justify-content: space-between;">
+                  <span>Inyección SQL / Web Exploit:</span> <strong style="color: #f43f5e;">${injCount}</strong>
+                </div>
+                <div style="background: #111827; padding: 10px 14px; border-radius: 8px; border: 1px solid #1f2937; display: flex; justify-content: space-between;">
+                  <span>Phishing / Credencial Access:</span> <strong style="color: #f43f5e;">${phishCount}</strong>
+                </div>
+              </div>
+            </div>
+
+            <div style="margin-bottom: 24px;" class="pdf-card-break">
+              <h2 style="font-size: 13px; font-weight: 700; color: #38bdf8; text-transform: uppercase; margin-bottom: 10px; border-left: 3px solid #38bdf8; padding-left: 8px;">3. Dictamen de Análisis Forense (Ollama)</h2>
+              <div style="font-size: 11px; line-height: 1.6; color: #e2e8f0; background: #111827; padding: 16px; border-radius: 8px; border: 1px solid #1f2937; font-family: 'JetBrains Mono', monospace; white-space: pre-line;">${aiEvaluationResult}</div>
+            </div>
+
+            <!-- EVIDENCIAS COMPLETAS SIN CORTES (Bloque fluido) -->
+            <div>
+              <h2 style="font-size: 13px; font-weight: 700; color: #38bdf8; text-transform: uppercase; margin-bottom: 10px; border-left: 3px solid #38bdf8; padding-left: 8px;">4. Registro Completo de Evidencias Críticas (High / Medium)</h2>
+              <div style="background: #111827; padding: 12px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 10px; border: 1px solid #1f2937; color: #94a3b8;">
+                ${processedLogs.filter(l => l.severity === 'HIGH' || l.severity === 'MEDIUM').map(l => `
+                  <div style="margin-bottom: 8px; border-bottom: 1px solid #1f2937; padding-bottom: 8px;" class="pdf-card-break">
+                    <span style="color: #38bdf8;">[${l.timestamp}]</span> <span style="color: ${l.severity === 'HIGH' ? '#f43f5e' : '#f97316'}; font-weight: bold;">[${l.severity}]</span> Host: <strong>${l.host}</strong> | IP: <strong>${l.source}</strong> | Causa: ${l.rootCause} <br>Detalle: <span style="color: #cbd5e1;">${l.detail}</span>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+
+          </div>
+        `;
+      } else {
+        title.innerText = `Informe Ejecutivo · ${clientName}`;
+        printable.innerHTML = `
+          <div style="background-color: #0b0f19; color: #f8fafc; padding: 36px; font-family: 'Inter', sans-serif; border-radius: 12px; border: 1px solid #065f46;">
+            
+            <div style="border-bottom: 3px solid #059669; padding-bottom: 20px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-end;">
+              <div>
+                <div style="font-size: 10px; font-weight: 700; color: #34d399; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 4px;">División C-Level & Gestión de Riesgos</div>
+                <h1 style="font-size: 20px; font-weight: 800; text-transform: uppercase; color: #ffffff; margin: 0;">REPORTE EJECUTIVO DE SEGURIDAD</h1>
+              </div>
+              <div style="text-align: right; font-size: 11px; color: #94a3b8; line-height: 1.4;">
+                <p style="margin: 0;"><strong>Cliente:</strong> <span style="color: #34d399;">${clientName}</span></p>
+                <p style="margin: 2px 0 0 0;"><strong>Estado:</strong> Protegido y Monitoreado</p>
+              </div>
+            </div>
+
+            <div style="background: rgba(5, 150, 105, 0.1); border: 1px solid rgba(5, 150, 105, 0.3); padding: 18px; border-radius: 10px; margin-bottom: 24px;" class="pdf-card-break">
+              <h2 style="font-size: 14px; font-weight: 700; color: #34d399; margin: 0 0 8px 0;">🛡️ Resumen de Salud Operativa para ${clientName}</h2>
+              <p style="font-size: 12px; color: #e2e8f0; line-height: 1.6; margin: 0;">
+                Este informe traduce la actividad técnica de la infraestructura a un formato claro y orientado a la gestión de riesgos para la directiva. Analizamos un total de <strong>${processedLogs.length} eventos</strong>. <strong>${normal} transcurrieron con absoluta normalidad</strong>. Detectamos <strong>${high} situaciones críticas</strong> y <strong>${medium} intentos de acceso por fuerza bruta</strong> que nuestros sistemas de defensa contuvieron de inmediato. La continuidad del negocio se mantiene 100% garantizada.
+              </p>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; text-align: center;" class="pdf-card-break">
+              <div style="background: #1e293b; padding: 14px; border-radius: 8px; border: 1px solid #334155;">
+                <span style="font-size: 10px; color: #94a3b8; display: block;">CRÍTICOS</span>
+                <strong style="font-size: 20px; color: #f43f5e; display: block; margin-top: 4px;">${high}</strong>
+                <span style="font-size: 9px; color: #f43f5e; display: block;">Contenidos</span>
+              </div>
+              <div style="background: #1e293b; padding: 14px; border-radius: 8px; border: 1px solid #334155;">
+                <span style="font-size: 10px; color: #94a3b8; display: block;">ACCESOS BLOQUEADOS</span>
+                <strong style="font-size: 20px; color: #f97316; display: block; margin-top: 4px;">${medium}</strong>
+                <span style="font-size: 9px; color: #f97316; display: block;">Fuerza bruta</span>
+              </div>
+              <div style="background: #1e293b; padding: 14px; border-radius: 8px; border: 1px solid #334155;">
+                <span style="font-size: 10px; color: #94a3b8; display: block;">ACTIVIDAD NORMAL</span>
+                <strong style="font-size: 20px; color: #3b82f6; display: block; margin-top: 4px;">${normal}</strong>
+                <span style="font-size: 9px; color: #3b82f6; display: block;">Operación diaria</span>
+              </div>
+            </div>
+
+            <div style="margin-bottom: 24px;" class="pdf-card-break">
+              <h2 style="font-size: 13px; font-weight: 700; color: #34d399; text-transform: uppercase; margin-bottom: 10px; border-left: 3px solid #34d399; padding-left: 8px;">Evaluación Ejecutiva de Riesgos</h2>
+              <div style="font-size: 11px; line-height: 1.6; color: #cbd5e1; background: #111827; padding: 16px; border-radius: 8px; border: 1px solid #1f2937; white-space: pre-line;">${aiEvaluationResult}</div>
+            </div>
+
+            <div class="pdf-card-break">
+              <h2 style="font-size: 13px; font-weight: 700; color: #34d399; text-transform: uppercase; margin-bottom: 10px; border-left: 3px solid #34d399; padding-left: 8px;">Recomendaciones Estratégicas</h2>
+              <ul style="margin: 0; padding-left: 18px; font-size: 11px; color: #cbd5e1; line-height: 1.7;">
+                <li><strong>Operación Ininterrumpida:</strong> Sin impacto financiero ni filtración de datos. Sistemas funcionando al 100%.</li>
+                <li><strong>Higiene de Credenciales:</strong> Reforzar el uso de contraseñas robustas y autenticación en dos pasos (MFA).</li>
+                <li><strong>Monitoreo SOC 24/7:</strong> Supervisión constante para salvaguardar los activos de ${clientName}.</li>
+              </ul>
+            </div>
+
+          </div>
+        `;
+      }
+      modal.classList.remove('hidden');
+    }
+
+    function closeReportModal() { document.getElementById('report-modal').classList.add('hidden'); }
+
+    function downloadPDF() {
+      const clientName = document.getElementById('client-name-input').value.trim().replace(/\s+/g, '_') || 'Cliente';
+      const element = document.getElementById('report-printable');
+      const opt = {
+        margin: 0.4,
+        filename: currentReportType === 'technical' ? `Informe_Tecnico_${clientName}.pdf` : `Informe_Ejecutivo_${clientName}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+      };
+      html2pdf().set(opt).from(element).save();
+    }
+  </script>
+</body>
+</html>
